@@ -213,13 +213,17 @@
     // Randomly pick a sentence pattern:
     const patterns = [
       () => `${pick(subjects)} ${pick(adverbs)} ${pick(verbs)} ${pick(objects)}.`,
-      () => `${pick(adjectives).charAt(0).toUpperCase() + pick(adjectives).slice(1)} days lie ahead.`,
+      () => `${capitalize(pick(adjectives))} days lie ahead.`,
       () => `${pick(subjects)} feels ${pick(adjectives)} and ${pick(adjectives)}.`,
       () => `The ${pick(objects)} ${pick(adverbs)} ${pick(verbs)}.`,
       () => `${pick(subjects)} must choose: ${choicesTemplates.map(c => c.text).join(", ")}.`
     ];
     // Pick a pattern and generate
     return patterns[Math.floor(Math.random()*patterns.length)]();
+  }
+
+  function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
   // Helper to pick random from array
@@ -350,4 +354,21 @@
       showText("Peace is fragile but gives a glimmer of hope.");
       renderChoices([
         { text: "Expand peace", next: 'organize' },
-        { text: "Protect your group",
+        { text: "Protect your group", next: 'stay' }
+      ]);
+    } else if (currentScene === 'end') {
+      showText("The story ends here... but survival continues beyond these words.");
+      renderChoices([
+        { text: "Restart", next: null }
+      ]);
+    }
+  }
+
+  // Kick off the story on load:
+  advanceScene();
+
+})();
+</script>
+
+</body>
+</html>
