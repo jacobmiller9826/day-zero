@@ -137,6 +137,7 @@
   let currentSceneId = "";
   let voiceEnabled = false;
   let utterance = null;
+  let started = false;
 
   // Speech synthesis function
   function speak(text) {
@@ -270,8 +271,6 @@
     return 0.5 + 0.5 * Math.sin(time*0.02);
   }
 
-  let showInstruction = true;
-
   function drawScene(time=0) {
     const scene = scenes[sceneIndex];
     currentSceneId = scene.id;
@@ -296,7 +295,7 @@
       ctx.fill();
     }
 
-    if(currentSceneId === "intro1" && showInstruction) {
+    if(currentSceneId === "intro1" && !started) {
       const sunX = W*0.5;
       const sunY = H*0.35;
       const sunPulse = 50 + Math.sin(time*0.01)*15;
@@ -377,8 +376,8 @@
     speak(scene.text);
     choicesDiv.innerHTML = "";
 
-    // Show instruction only on first intro scene
-    instruction.style.display = (scene.id === "intro1") ? "block" : "none";
+    // Show instruction only on first intro scene and if not started
+    instruction.style.display = (scene.id === "intro1" && !started) ? "block" : "none";
 
     if(scene.choices) {
       scene.choices.forEach(choice => {
@@ -389,4 +388,11 @@
           if(scene.id === 'decision') {
             playerChoice = choice;
             sceneIndex++;
-            while(sceneIndex < scenes
+            updateScene();
+          } else if (scene.choices) {
+            // For other choice scenes
+            if(scene.path) {
+              // Jump to path scenes depending on choice and path
+              if(scene.path === 'Flee') {
+                if(choice === 'Push forward') {
+                  sceneIndex = scenes.findIndex(s => s.id === 'flee3
