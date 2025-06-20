@@ -2,15 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Day Zero: Phoenix</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Rubik+Distressed&display=swap');
     html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      height: 100%;
+      margin: 0; padding: 0; overflow: hidden; height: 100%;
       background: #000;
       font-family: 'Rubik Distressed', cursive;
       color: #fff8e1;
@@ -19,11 +16,10 @@
     canvas {
       display: block;
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
       z-index: 0;
+      background: black;
     }
     #narration {
       position: fixed;
@@ -33,7 +29,7 @@
       font-size: clamp(1.2rem, 2.5vw, 2.5rem);
       padding: 0 20px;
       z-index: 10;
-      text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.7);
+      text-shadow: 2px 2px 6px rgba(0,0,0,0.7);
       opacity: 1;
       transition: opacity 1s ease;
       pointer-events: none;
@@ -48,7 +44,7 @@
       z-index: 11;
     }
     .choice-btn {
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0,0,0,0.5);
       border: 2px solid #fff8e1;
       color: #fff8e1;
       font-size: 1rem;
@@ -57,9 +53,10 @@
       cursor: pointer;
       border-radius: 4px;
       transition: background 0.3s;
+      user-select: none;
     }
     .choice-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255,255,255,0.1);
     }
   </style>
 </head>
@@ -80,76 +77,226 @@
   canvas.width = W;
   canvas.height = H;
 
-  function resize() {
+  window.addEventListener('resize', () => {
     W = window.innerWidth;
     H = window.innerHeight;
     canvas.width = W;
     canvas.height = H;
-  }
-  window.addEventListener('resize', resize);
+  });
 
-  let playerChoice = null;
+  let playerChoice = null; // Flee, Stay, Organize
   let flash = 0;
   let sceneIndex = 0;
+  let currentSceneId = "";
 
-  const scenes = [
-    { id: 'intro1', text: "The taps run dry. 5 million people are still here.", bg: "#f5d27a" },
-    { id: 'intro2', text: "The city panics. Shelves empty. Sirens echo.", bg: "#ff9966" },
-    { id: 'decision', text: "What will you do?", bg: "#cc3300", choices: ["Flee", "Stay", "Organize"] },
-    { id: 'flee1', text: "You flee. Highways choked. Cars idle under sun.", bg: "#e25822", path: "Flee" },
-    { id: 'flee2', text: "Engine dies. You walk. Heat blurs the horizon.", bg: "#e65c00", path: "Flee" },
-    { id: 'flee3', text: "A shimmer in the distance... Hope or hallucination?", bg: "#cc5200", path: "Flee", choices: ["Push forward", "Give up"] }
-  ];
-
-  const cars = Array.from({ length: 5 }, () => ({
-    x: Math.random() * W,
-    y: H * 0.75 + Math.random() * 30,
-    speed: 1 + Math.random() * 1.5
+  // Data for people, cars, shadows, fire embers etc
+  const cars = Array.from({length:5}, () => ({
+    x: Math.random()*W,
+    y: H*0.75 + Math.random()*30,
+    speed: 1 + Math.random()*1.5
   }));
 
-  const walkers = Array.from({ length: 4 }, () => ({
-    x: Math.random() * W,
-    y: H * 0.7 + Math.random() * 40,
+  const walkers = Array.from({length:4}, () => ({
+    x: Math.random()*W,
+    y: H*0.7 + Math.random()*40,
     speed: 0.5 + Math.random()
   }));
 
-  function drawScene(time) {
-    ctx.clearRect(0, 0, W, H);
+  const shadows = Array.from({length:6}, () => ({
+    x: Math.random()*W,
+    y: H*0.65 + Math.random()*50,
+    speed: 0.3 + Math.random()*0.5,
+    width: 15 + Math.random()*20,
+    height: 40 + Math.random()*30,
+    direction: Math.random() > 0.5 ? 1 : -1,
+    flicker: 0
+  }));
 
+  const fireEmbers = Array.from({length:20}, () => ({
+    x: W*0.5 + (Math.random()-0.5)*100,
+    y: H*0.85 + (Math.random()-0.5)*30,
+    vy: -0.5 - Math.random(),
+    alpha: Math.random(),
+    size: 2 + Math.random()*3
+  }));
+
+  // Story scenes:
+  const scenes = [
+    // Intro
+    { id:'intro1', text:"The taps run dry. 5 million people are still here.", bg:"#f5d27a" },
+    { id:'intro2', text:"The city panics. Shelves empty. Sirens echo.", bg:"#ff9966" },
+    { id:'decision', text:"What will you do?", bg:"#cc3300", choices:["Flee", "Stay", "Organize"] },
+
+    // FLEE path scenes
+    { id:'flee1', text:"You flee. Highways choked. Cars idle under sun.", bg:"#e25822", path:"Flee" },
+    { id:'flee2', text:"Engine dies. You walk. Heat blurs the horizon.", bg:"#e65c00", path:"Flee" },
+    { id:'flee3', text:"A shimmer in the distance... Hope or hallucination?", bg:"#cc5200", path:"Flee", choices:["Push forward","Give up"] },
+
+    // STAY path scenes
+    { id:'stay1', text:"Barricades & Silence. The streets empty. Flickering lights.", bg:"#332211", path:"Stay" },
+    { id:'stay2', text:"Neighborhood Watch. You rally neighbors… or confront them.", bg:"#442200", path:"Stay" },
+    { id:'stay3', text:"Raid or Rescue? Flashlights approach. Friend or foe?", bg:"#553311", path:"Stay", choices:["Open door","Hide"] },
+
+    // ORGANIZE path scenes
+    { id:'org1', text:"The Circle Gathers. A few hands. One water filter.", bg:"#1a331a", path:"Organize" },
+    { id:'org2', text:"Facing the City. Officials hoard water. Churches open gates.", bg:"#225522", path:"Organize" },
+    { id:'org3', text:"Revolution or Collapse. The people rise… or fall apart.", bg:"#336633", path:"Organize", choices:["Rise","Fall"] }
+  ];
+
+  // Draw functions for animations
+
+  function drawCars() {
+    cars.forEach(car => {
+      ctx.fillStyle = "#444";
+      ctx.fillRect(car.x, car.y, 40, 20);
+      // wheels
+      ctx.fillStyle = "#222";
+      ctx.beginPath();
+      ctx.arc(car.x + 10, car.y + 20, 5, 0, Math.PI*2);
+      ctx.arc(car.x + 30, car.y + 20, 5, 0, Math.PI*2);
+      ctx.fill();
+      car.x += car.speed;
+      if (car.x > W) car.x = -50;
+    });
+  }
+
+  function drawWalkers() {
+    walkers.forEach(walker => {
+      ctx.fillStyle = "#222";
+      // body
+      ctx.fillRect(walker.x, walker.y, 10, 20);
+      // head
+      ctx.beginPath();
+      ctx.arc(walker.x + 5, walker.y - 5, 6, 0, Math.PI * 2);
+      ctx.fill();
+      walker.x += walker.speed;
+      if (walker.x > W) walker.x = -20;
+    });
+  }
+
+  function drawShadows(time) {
+    shadows.forEach(s => {
+      s.flicker += 0.05;
+      const flick = Math.sin(s.flicker)*10;
+      ctx.fillStyle = `rgba(0,0,0,${0.3 + flick*0.01})`;
+      ctx.beginPath();
+      // ellipse shadow shape
+      ctx.ellipse(s.x + flick*s.direction, s.y, s.width, s.height, 0, 0, Math.PI*2);
+      ctx.fill();
+      s.x += s.speed * s.direction;
+      if (s.x < -s.width) s.x = W + s.width;
+      if (s.x > W + s.width) s.x = -s.width;
+    });
+  }
+
+  function drawFireEmbers() {
+    fireEmbers.forEach(f => {
+      f.y += f.vy;
+      f.alpha -= 0.005;
+      if (f.alpha <= 0) {
+        f.x = W*0.5 + (Math.random()-0.5)*100;
+        f.y = H*0.85 + (Math.random()-0.5)*30;
+        f.vy = -0.5 - Math.random();
+        f.alpha = 1;
+        f.size = 2 + Math.random()*3;
+      }
+      ctx.fillStyle = `rgba(255, 140, 0, ${f.alpha.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, f.size, 0, Math.PI*2);
+      ctx.fill();
+    });
+  }
+
+  // Flickering light effect for Stay1
+  function flickerLight(time) {
+    return 0.5 + 0.5 * Math.sin(time*0.02);
+  }
+
+  function drawScene(time) {
     const scene = scenes[sceneIndex];
+    currentSceneId = scene.id;
+
+    ctx.clearRect(0, 0, W, H);
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, scene.bg || "#000");
     grad.addColorStop(1, "#1a0d00");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
-    const sunX = W * 0.5;
-    const sunY = H * 0.2;
-    const sunPulse = 80 + Math.sin(time * 0.005) * 10;
-    const sunGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, sunPulse);
-    sunGrad.addColorStop(0, "#ffdd66");
-    sunGrad.addColorStop(1, "rgba(255, 221, 102, 0)");
-    ctx.fillStyle = sunGrad;
-    ctx.beginPath();
-    ctx.arc(sunX, sunY, sunPulse, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (scene.id === "flee1") {
-      cars.forEach(car => {
-        ctx.fillStyle = "#444";
-        ctx.fillRect(car.x, car.y, 40, 20);
-        car.x += car.speed;
-        if (car.x > W) car.x = -50;
-      });
+    // Sun for FLEE scenes
+    if (currentSceneId.startsWith("flee")) {
+      const sunX = W * 0.5;
+      const sunY = H * 0.2;
+      const sunPulse = 80 + Math.sin(time * 0.005) * 10;
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, sunPulse);
+      sunGrad.addColorStop(0, "#ffdd66");
+      sunGrad.addColorStop(1, "rgba(255, 221, 102, 0)");
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, sunPulse, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    if (scene.id === "flee2") {
-      walkers.forEach(walker => {
-        ctx.fillStyle = "#222";
-        ctx.fillRect(walker.x, walker.y, 10, 20);
-        walker.x += walker.speed;
-        if (walker.x > W) walker.x = -20;
-      });
+    // Animations by scene
+    if (currentSceneId === "flee1") {
+      drawCars();
+    }
+    if (currentSceneId === "flee2") {
+      drawWalkers();
+    }
+
+    // Stay path animations
+    if (currentSceneId === "stay1") {
+      // flickering light effect overlay
+      const flick = flickerLight(time);
+      ctx.fillStyle = `rgba(255,255,200,${flick*0.3})`;
+      ctx.fillRect(W*0.4, H*0.3, W*0.2, H*0.4);
+    }
+    if (currentSceneId === "stay2") {
+      drawShadows(time);
+    }
+    if (currentSceneId === "stay3") {
+      // flashlight beams sweeping
+      const beamWidth = 120;
+      const sweepX = (time * 0.2) % (W + beamWidth) - beamWidth;
+      ctx.fillStyle = 'rgba(255,255,180,0.2)';
+      ctx.beginPath();
+      ctx.moveTo(sweepX, 0);
+      ctx.lineTo(sweepX + beamWidth, 0);
+      ctx.lineTo(sweepX + beamWidth*0.6, H);
+      ctx.lineTo(sweepX - beamWidth*0.4, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Organize path animations
+    if (currentSceneId === "org1") {
+      drawFireEmbers();
+    }
+    if (currentSceneId === "org2") {
+      // simple gate silhouette
+      ctx.fillStyle = "#556644";
+      ctx.fillRect(W*0.4, H*0.6, W*0.2, H*0.3);
+      ctx.strokeStyle = "#889966";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(W*0.4, H*0.6);
+      ctx.lineTo(W*0.6, H*0.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(W*0.6, H*0.6);
+      ctx.lineTo(W*0.4, H*0.9);
+      ctx.stroke();
+    }
+    if (currentSceneId === "org3") {
+      // rising crowd - abstract rectangles
+      const baseY = H*0.75;
+      for(let i=0; i<10; i++) {
+        let x = W*0.3 + i*30;
+        let h = 30 + Math.sin(time*0.01 + i)*20;
+        ctx.fillStyle = `rgba(50,150,50,0.7)`;
+        ctx.fillRect(x, baseY - h, 20, h);
+      }
     }
 
     if (flash > 0) {
@@ -174,12 +321,29 @@
         btn.onclick = () => {
           if (scene.id === 'decision') {
             playerChoice = choice;
+            // jump to first scene of chosen path:
             sceneIndex++;
+            while(sceneIndex < scenes.length && scenes[sceneIndex].path !== playerChoice){
+              sceneIndex++;
+            }
             updateScene();
-          } else if (scene.id === 'flee3') {
-            narration.textContent = choice === "Push forward"
-              ? "You crawl toward the mirage. It's real. You survive."
-              : "You sit. You wait. The desert takes you.";
+          } else {
+            // Final choice scenes (flee3, stay3, org3)
+            let endingText = "";
+            if(scene.id === "flee3") {
+              endingText = (choice === "Push forward") ? 
+                "You crawl toward the mirage. It's real. You survive." : 
+                "You sit. You wait. The desert takes you.";
+            } else if(scene.id === "stay3") {
+              endingText = (choice === "Open door") ? 
+                "You open the door. The strangers are survivors. Hope returns." : 
+                "You hide. The raiders pass by. For now.";
+            } else if(scene.id === "org3") {
+              endingText = (choice === "Rise") ? 
+                "The people rise together, a new dawn begins." : 
+                "The movement falls apart, swallowed by chaos.";
+            }
+            narration.textContent = endingText;
             choicesDiv.innerHTML = "";
           }
         };
@@ -191,17 +355,20 @@
   function handleAdvance() {
     flash = 0.2;
     const scene = scenes[sceneIndex];
-    if (!scene.choices) {
+    if(!scene.choices){
       sceneIndex++;
-      while (sceneIndex < scenes.length && scenes[sceneIndex].path && scenes[sceneIndex].path !== playerChoice) {
+      // Skip scenes not matching playerChoice path
+      while(sceneIndex < scenes.length && scenes[sceneIndex].path && scenes[sceneIndex].path !== playerChoice){
         sceneIndex++;
       }
-      if (sceneIndex < scenes.length) updateScene();
+      if(sceneIndex < scenes.length){
+        updateScene();
+      }
     }
   }
 
   canvas.addEventListener("click", handleAdvance);
-  canvas.addEventListener("touchstart", (e) => { e.preventDefault(); handleAdvance(); }, { passive: false });
+  canvas.addEventListener("touchstart", e => { e.preventDefault(); handleAdvance(); }, {passive:false});
 
   updateScene();
   drawScene();
