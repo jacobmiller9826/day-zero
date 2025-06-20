@@ -24,7 +24,10 @@
     #narration {
       position: fixed;
       bottom: 60px;
-      width: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: auto;
+      max-width: 90vw;
       text-align: center;
       font-size: clamp(1.2rem, 2.5vw, 2.5rem);
       padding: 0 20px;
@@ -58,12 +61,54 @@
     .choice-btn:hover {
       background: rgba(255,255,255,0.1);
     }
+    #instruction {
+      position: fixed;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: auto;
+      max-width: 90vw;
+      text-align: center;
+      font-size: 1rem;
+      color: #ffdd66;
+      font-family: 'Rubik Distressed', cursive;
+      opacity: 1;
+      animation: blink 2s infinite;
+      z-index: 12;
+      user-select: none;
+      pointer-events: none;
+    }
+    @keyframes blink {
+      0%, 50%, 100% {opacity: 1;}
+      25%, 75% {opacity: 0;}
+    }
+    #voiceToggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.6);
+      color: #fff8e1;
+      border: 2px solid #fff8e1;
+      border-radius: 5px;
+      padding: 8px 12px;
+      font-family: 'Rubik Distressed', cursive;
+      font-size: 1rem;
+      cursor: pointer;
+      z-index: 20;
+      user-select: none;
+      transition: background 0.3s;
+    }
+    #voiceToggle:hover {
+      background: rgba(255,255,255,0.15);
+    }
   </style>
 </head>
 <body>
-<canvas id="canvas"></canvas>
-<div id="narration">The taps run dry. 5 million people are still here.</div>
-<div id="choices"></div>
+  <canvas id="canvas"></canvas>
+  <div id="narration">The taps run dry. 5 million people are still here.</div>
+  <div id="choices"></div>
+  <div id="instruction">Tap or click anywhere to begin your story</div>
+  <button id="voiceToggle">🔊 Voice: Off</button>
 
 <script>
 (() => {
@@ -71,6 +116,8 @@
   const ctx = canvas.getContext('2d');
   const narration = document.getElementById('narration');
   const choicesDiv = document.getElementById('choices');
+  const instruction = document.getElementById('instruction');
+  const voiceToggle = document.getElementById('voiceToggle');
 
   let W = window.innerWidth;
   let H = window.innerHeight;
@@ -84,12 +131,35 @@
     canvas.height = H;
   });
 
-  let playerChoice = null; // Flee, Stay, Organize
+  let playerChoice = null;
   let flash = 0;
   let sceneIndex = 0;
   let currentSceneId = "";
+  let voiceEnabled = false;
+  let utterance = null;
 
-  // Data for people, cars, shadows, fire embers etc
+  // Speech synthesis function
+  function speak(text) {
+    if (!voiceEnabled) return;
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    }
+    utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    speechSynthesis.speak(utterance);
+  }
+
+  voiceToggle.onclick = () => {
+    voiceEnabled = !voiceEnabled;
+    voiceToggle.textContent = voiceEnabled ? "🔊 Voice: On" : "🔇 Voice: Off";
+    if (!voiceEnabled && speechSynthesis.speaking) {
+      speechSynthesis.cancel();
+    } else if (voiceEnabled) {
+      speak(narration.textContent);
+    }
+  };
+
   const cars = Array.from({length:5}, () => ({
     x: Math.random()*W,
     y: H*0.75 + Math.random()*30,
@@ -120,57 +190,47 @@
     size: 2 + Math.random()*3
   }));
 
-  // Story scenes:
   const scenes = [
-    // Intro
     { id:'intro1', text:"The taps run dry. 5 million people are still here.", bg:"#f5d27a" },
     { id:'intro2', text:"The city panics. Shelves empty. Sirens echo.", bg:"#ff9966" },
     { id:'decision', text:"What will you do?", bg:"#cc3300", choices:["Flee", "Stay", "Organize"] },
 
-    // FLEE path scenes
     { id:'flee1', text:"You flee. Highways choked. Cars idle under sun.", bg:"#e25822", path:"Flee" },
     { id:'flee2', text:"Engine dies. You walk. Heat blurs the horizon.", bg:"#e65c00", path:"Flee" },
     { id:'flee3', text:"A shimmer in the distance... Hope or hallucination?", bg:"#cc5200", path:"Flee", choices:["Push forward","Give up"] },
 
-    // STAY path scenes
     { id:'stay1', text:"Barricades & Silence. The streets empty. Flickering lights.", bg:"#332211", path:"Stay" },
     { id:'stay2', text:"Neighborhood Watch. You rally neighbors… or confront them.", bg:"#442200", path:"Stay" },
     { id:'stay3', text:"Raid or Rescue? Flashlights approach. Friend or foe?", bg:"#553311", path:"Stay", choices:["Open door","Hide"] },
 
-    // ORGANIZE path scenes
     { id:'org1', text:"The Circle Gathers. A few hands. One water filter.", bg:"#1a331a", path:"Organize" },
     { id:'org2', text:"Facing the City. Officials hoard water. Churches open gates.", bg:"#225522", path:"Organize" },
     { id:'org3', text:"Revolution or Collapse. The people rise… or fall apart.", bg:"#336633", path:"Organize", choices:["Rise","Fall"] }
   ];
 
-  // Draw functions for animations
-
   function drawCars() {
     cars.forEach(car => {
       ctx.fillStyle = "#444";
       ctx.fillRect(car.x, car.y, 40, 20);
-      // wheels
       ctx.fillStyle = "#222";
       ctx.beginPath();
       ctx.arc(car.x + 10, car.y + 20, 5, 0, Math.PI*2);
       ctx.arc(car.x + 30, car.y + 20, 5, 0, Math.PI*2);
       ctx.fill();
       car.x += car.speed;
-      if (car.x > W) car.x = -50;
+      if(car.x > W) car.x = -50;
     });
   }
 
   function drawWalkers() {
     walkers.forEach(walker => {
       ctx.fillStyle = "#222";
-      // body
       ctx.fillRect(walker.x, walker.y, 10, 20);
-      // head
       ctx.beginPath();
-      ctx.arc(walker.x + 5, walker.y - 5, 6, 0, Math.PI * 2);
+      ctx.arc(walker.x + 5, walker.y - 5, 6, 0, Math.PI*2);
       ctx.fill();
       walker.x += walker.speed;
-      if (walker.x > W) walker.x = -20;
+      if(walker.x > W) walker.x = -20;
     });
   }
 
@@ -180,12 +240,11 @@
       const flick = Math.sin(s.flicker)*10;
       ctx.fillStyle = `rgba(0,0,0,${0.3 + flick*0.01})`;
       ctx.beginPath();
-      // ellipse shadow shape
       ctx.ellipse(s.x + flick*s.direction, s.y, s.width, s.height, 0, 0, Math.PI*2);
       ctx.fill();
       s.x += s.speed * s.direction;
-      if (s.x < -s.width) s.x = W + s.width;
-      if (s.x > W + s.width) s.x = -s.width;
+      if(s.x < -s.width) s.x = W + s.width;
+      if(s.x > W + s.width) s.x = -s.width;
     });
   }
 
@@ -193,26 +252,27 @@
     fireEmbers.forEach(f => {
       f.y += f.vy;
       f.alpha -= 0.005;
-      if (f.alpha <= 0) {
+      if(f.alpha <= 0) {
         f.x = W*0.5 + (Math.random()-0.5)*100;
         f.y = H*0.85 + (Math.random()-0.5)*30;
         f.vy = -0.5 - Math.random();
         f.alpha = 1;
         f.size = 2 + Math.random()*3;
       }
-      ctx.fillStyle = `rgba(255, 140, 0, ${f.alpha.toFixed(2)})`;
+      ctx.fillStyle = `rgba(255,140,0,${f.alpha.toFixed(2)})`;
       ctx.beginPath();
       ctx.arc(f.x, f.y, f.size, 0, Math.PI*2);
       ctx.fill();
     });
   }
 
-  // Flickering light effect for Stay1
   function flickerLight(time) {
     return 0.5 + 0.5 * Math.sin(time*0.02);
   }
 
-  function drawScene(time) {
+  let showInstruction = true;
+
+  function drawScene(time=0) {
     const scene = scenes[sceneIndex];
     currentSceneId = scene.id;
 
@@ -223,40 +283,47 @@
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
-    // Sun for FLEE scenes
-    if (currentSceneId.startsWith("flee")) {
-      const sunX = W * 0.5;
-      const sunY = H * 0.2;
-      const sunPulse = 80 + Math.sin(time * 0.005) * 10;
+    if(currentSceneId.startsWith("flee")) {
+      const sunX = W*0.5;
+      const sunY = H*0.2;
+      const sunPulse = 80 + Math.sin(time*0.005)*10;
       const sunGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, sunPulse);
       sunGrad.addColorStop(0, "#ffdd66");
-      sunGrad.addColorStop(1, "rgba(255, 221, 102, 0)");
+      sunGrad.addColorStop(1, "rgba(255,221,102,0)");
       ctx.fillStyle = sunGrad;
       ctx.beginPath();
-      ctx.arc(sunX, sunY, sunPulse, 0, Math.PI * 2);
+      ctx.arc(sunX, sunY, sunPulse, 0, Math.PI*2);
       ctx.fill();
     }
 
-    // Animations by scene
-    if (currentSceneId === "flee1") {
-      drawCars();
-    }
-    if (currentSceneId === "flee2") {
-      drawWalkers();
+    if(currentSceneId === "intro1" && showInstruction) {
+      const sunX = W*0.5;
+      const sunY = H*0.35;
+      const sunPulse = 50 + Math.sin(time*0.01)*15;
+      const sunGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, sunPulse);
+      sunGrad.addColorStop(0, "#fff1a8");
+      sunGrad.addColorStop(1, "rgba(255,255,168,0)");
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, sunPulse, 0, Math.PI*2);
+      ctx.fill();
     }
 
-    // Stay path animations
-    if (currentSceneId === "stay1") {
-      // flickering light effect overlay
+    if(currentSceneId === "flee1") {
+      drawCars();
+    }
+    if(currentSceneId === "flee2") {
+      drawWalkers();
+    }
+    if(currentSceneId === "stay1") {
       const flick = flickerLight(time);
       ctx.fillStyle = `rgba(255,255,200,${flick*0.3})`;
       ctx.fillRect(W*0.4, H*0.3, W*0.2, H*0.4);
     }
-    if (currentSceneId === "stay2") {
+    if(currentSceneId === "stay2") {
       drawShadows(time);
     }
-    if (currentSceneId === "stay3") {
-      // flashlight beams sweeping
+    if(currentSceneId === "stay3") {
       const beamWidth = 120;
       const sweepX = (time * 0.2) % (W + beamWidth) - beamWidth;
       ctx.fillStyle = 'rgba(255,255,180,0.2)';
@@ -268,13 +335,10 @@
       ctx.closePath();
       ctx.fill();
     }
-
-    // Organize path animations
-    if (currentSceneId === "org1") {
+    if(currentSceneId === "org1") {
       drawFireEmbers();
     }
-    if (currentSceneId === "org2") {
-      // simple gate silhouette
+    if(currentSceneId === "org2") {
       ctx.fillStyle = "#556644";
       ctx.fillRect(W*0.4, H*0.6, W*0.2, H*0.3);
       ctx.strokeStyle = "#889966";
@@ -288,8 +352,7 @@
       ctx.lineTo(W*0.4, H*0.9);
       ctx.stroke();
     }
-    if (currentSceneId === "org3") {
-      // rising crowd - abstract rectangles
+    if(currentSceneId === "org3") {
       const baseY = H*0.75;
       for(let i=0; i<10; i++) {
         let x = W*0.3 + i*30;
@@ -299,7 +362,7 @@
       }
     }
 
-    if (flash > 0) {
+    if(flash > 0) {
       ctx.fillStyle = `rgba(255,255,255,${flash})`;
       ctx.fillRect(0, 0, W, H);
       flash -= 0.02;
@@ -311,68 +374,19 @@
   function updateScene() {
     const scene = scenes[sceneIndex];
     narration.textContent = scene.text;
+    speak(scene.text);
     choicesDiv.innerHTML = "";
 
-    if (scene.choices) {
+    // Show instruction only on first intro scene
+    instruction.style.display = (scene.id === "intro1") ? "block" : "none";
+
+    if(scene.choices) {
       scene.choices.forEach(choice => {
         const btn = document.createElement('button');
         btn.textContent = choice;
         btn.className = 'choice-btn';
         btn.onclick = () => {
-          if (scene.id === 'decision') {
+          if(scene.id === 'decision') {
             playerChoice = choice;
-            // jump to first scene of chosen path:
             sceneIndex++;
-            while(sceneIndex < scenes.length && scenes[sceneIndex].path !== playerChoice){
-              sceneIndex++;
-            }
-            updateScene();
-          } else {
-            // Final choice scenes (flee3, stay3, org3)
-            let endingText = "";
-            if(scene.id === "flee3") {
-              endingText = (choice === "Push forward") ? 
-                "You crawl toward the mirage. It's real. You survive." : 
-                "You sit. You wait. The desert takes you.";
-            } else if(scene.id === "stay3") {
-              endingText = (choice === "Open door") ? 
-                "You open the door. The strangers are survivors. Hope returns." : 
-                "You hide. The raiders pass by. For now.";
-            } else if(scene.id === "org3") {
-              endingText = (choice === "Rise") ? 
-                "The people rise together, a new dawn begins." : 
-                "The movement falls apart, swallowed by chaos.";
-            }
-            narration.textContent = endingText;
-            choicesDiv.innerHTML = "";
-          }
-        };
-        choicesDiv.appendChild(btn);
-      });
-    }
-  }
-
-  function handleAdvance() {
-    flash = 0.2;
-    const scene = scenes[sceneIndex];
-    if(!scene.choices){
-      sceneIndex++;
-      // Skip scenes not matching playerChoice path
-      while(sceneIndex < scenes.length && scenes[sceneIndex].path && scenes[sceneIndex].path !== playerChoice){
-        sceneIndex++;
-      }
-      if(sceneIndex < scenes.length){
-        updateScene();
-      }
-    }
-  }
-
-  canvas.addEventListener("click", handleAdvance);
-  canvas.addEventListener("touchstart", e => { e.preventDefault(); handleAdvance(); }, {passive:false});
-
-  updateScene();
-  drawScene();
-})();
-</script>
-</body>
-</html>
+            while(sceneIndex < scenes
