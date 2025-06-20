@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Generative Phoenix Collapse - Day Zero</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rubik+Distressed&display=swap');
+
+  html, body {
+    margin: 0; padding: 0;
+    overflow: hidden;
+    height: 100%;
+    background: linear-gradient(to top, #3d1e00 0%, #f5d27a 60%, #fff0c8 100%);
+    font-family: 'Rubik Distressed', cursive, sans-serif;
+    color: #fff8e1;
+    user-select: none;
+  }
+
+  #canvas {
+    display: block;
+    position: fixed;
+    top:0; left:0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    background: transparent;
+  }
+
+  #narration {
+    position: fixed;
+    bottom: 50px;
+    width: 100%;
+    text-align: center;
+    font-size: clamp(1.2rem, 2vw, 2.5rem);
+    text-shadow:
+      2px 2px 6px rgba(0,0,0,0.8),
+      -2px -2px 6px rgba(0,0,0,0.8);
+    pointer-events: none;
+    opacity: 0;
+    animation: fadeInOut 12s ease-in-out forwards;
+    z-index: 10;
+    padding: 0 20px;
+  }
+
+  @keyframes fadeInOut {
+    0% {opacity: 0;}
+    15% {opacity: 1;}
+    85% {opacity: 1;}
+    100% {opacity: 0;}
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="narration">The taps run dry. 5 million people are still here.</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+  
+  // Resize canvas to window size
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * devicePixelRatio;
+    canvas.height = H * devicePixelRatio;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Utility: random number helpers
+  function randRange(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+  function randInt(min, max) {
+    return Math.floor(randRange(min, max));
+  }
+
+  // Perlin noise function for smooth randomness
+  // Source: https://gist.github.com/banksean/304522
+  class Perlin {
+    constructor() {
+      this.permutation = [];
+      for (let i = 0; i < 256; i++) this.permutation[i] = i;
+      this.permutation.sort(() => Math.random() - 0.5);
+      this.permutation = this.permutation.concat(this.permutation);
+    }
+    fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    lerp(t, a, b) { return a + t * (b - a); }
+    grad(hash, x, y) {
+      const h = hash & 3;
+      const u = h < 2 ? x : y;
+      const v = h < 2 ? y : x;
+      return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    }
+    noise(x, y) {
+      const X = Math.floor(x) & 255;
+      const Y = Math.floor(y) & 255;
+      const xf = x - Math.floor(x);
+      const yf = y - Math.floor(y);
+      const u = this.fade(xf);
+      const v = this.fade(yf);
+      const aa = this.permutation[this.permutation[X] + Y];
+      const ab = this.permutation[this.permutation[X] + Y + 1];
+      const ba = this.permutation[this.permutation[X + 1] + Y];
+      const bb = this.permutation[this.permutation[X + 1] + Y + 1];
+      const x1 = this.lerp(u, this.grad(aa, xf, yf), this.grad(ba, xf - 1, yf));
+      const x2 = this.lerp(u, this.grad(ab, xf, yf - 1), this.grad(bb, xf - 1, yf - 1));
+      return (this.lerp(v, x1, x2) + 1) / 2;
+    }
+  }
+  const perlin = new Perlin();
+
+  // Desert colors
+  const skyTop = '#f5d27a';
+  const skyBottom = '#3d1e00';
+  const sandBase = '#d9af6f';
+  const sandShade = '#a67c39';
+  const cactusGreen = '#2e5d32';
+  const sunColor = '#ffbc42';
+  const cityLightColor = '#f7d774';
+
+  // Variables
+  const cactusCount = 40;
+  const cacti = [];
+  const dunes = [];
+  const cityLights = [];
+  const narrationTexts = [
+    "The taps run dry. 5 million people are still here.",
+    "Desperation sets in as the sun blazes overhead.",
+    "Roads clog with those fleeing, hope fading with the water.",
+    "But in the dust, resilience flickers like a distant light.",
+  ];
+  let narrationIndex = 0;
+  const narrationDiv = document.getElementById('narration');
+
+  // Sun position, moves left to right over 60 seconds
+  const sunDuration = 60000;
+  let sunStartTime = performance.now();
+
+  // Initialize cacti with random positions and sizes
+  for(let i=0; i < cactusCount; i++) {
+    cacti.push({
+      x: randRange(0, W),
+      y: randRange(H * 0.65, H * 0.85),
+      scale: randRange(0.5, 1.3),
+      swayPhase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  // Initialize dunes as horizontal waves along bottom
+  const duneSegments = 8;
+  for(let i=0; i <= duneSegments; i++) {
+    dunes.push({
+      x: (W / duneSegments) * i,
+      baseY: H * 0.85 + randRange(-10, 20),
+      noiseOffset: Math.random() * 1000,
+    });
+  }
+
+  // Initialize city lights
+  const cityLightCount = 120;
+  for(let i=0; i < cityLightCount; i++) {
+    cityLights.push({
+      x: randRange(W * 0.4, W * 0.95),
+      y: randRange(H * 0.6, H * 0.75),
+      radius: randRange(1, 3),
+      flickerPhase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  // Heat haze parameters
+  const heatHazeLayers = 3;
+  const heatHazeMaxOffset = 4;
+  const heatHazePoints = [];
+  const heatHazeCount = 40;
+  for(let i=0; i < heatHazeCount; i++) {
+    heatHazePoints.push({
+      x: randRange(0, W),
+      y: randRange(H * 0.6, H * 0.9),
+      baseX: 0,
+      baseY: 0,
+      offsetPhase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  function drawSun(progress) {
+    // progress from 0 to 1, sun moves left (early morning) to right (evening)
+    const sunX = W * (0.1 + 0.8 * progress);
+    const sunY = H * 0.15 + Math.sin(progress * Math.PI) * H * 0.05;
+
+    const gradient = ctx.createRadialGradient(sunX, sunY, 20, sunX, sunY, 120);
+    gradient.addColorStop(0, sunColor);
+    gradient.addColorStop(1, 'rgba(255,188,66,0)');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, 100, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawSky() {
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, skyTop);
+    grad.addColorStop(1, skyBottom);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawDunes(time) {
+    ctx.fillStyle = sandBase;
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for(let i=0; i < dunes.length; i++) {
+      let d = dunes[i];
+      // Use Perlin noise for smooth wave
+      let yOffset = perlin.noise(d.noiseOffset, time * 0.0001) * 20;
+      ctx.lineTo(d.x, d.baseY + yOffset);
+    }
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    ctx.fill();
+
+    // Shade for dunes
+    ctx.fillStyle = sandShade;
+    ctx.beginPath();
+    for(let i=0; i < dunes.length; i++) {
+      let d = dunes[i];
+      let yOffset = perlin.noise(d.noiseOffset + 100, time * 0.0001) * 10;
+      ctx.lineTo(d.x, d.baseY + yOffset + 10);
+    }
+    ctx.lineTo(W, H);
+    ctx.lineTo(0, H);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Draw a simple cactus shape
+  function drawCactus(x, y, scale, swayPhase) {
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Sway side to side
+    const sway = Math.sin(performance.now() * 0.002 + swayPhase) * 0.05;
+    ctx.rotate(sway);
+
+    ctx.fillStyle = cactusGreen;
+    ctx.strokeStyle = '#1b3b17';
+    ctx.lineWidth = 2;
+
+    // Main stalk
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -60 * scale);
+    ctx.stroke();
+    ctx.fillRect(-5 * scale, -60 * scale, 10 * scale, 60 * scale);
+
+    // Left arm
+    ctx.beginPath();
+    ctx.moveTo(0, -40 * scale);
+    ctx.lineTo(-20 * scale, -50 * scale);
+    ctx.lineTo(-20 * scale, -30 * scale);
+    ctx.stroke();
+    ctx.fillRect(-25 * scale, -50 * scale, 10 * scale, 20 * scale);
+
+    // Right arm
+    ctx.beginPath();
+    ctx.moveTo(0, -30 * scale);
+    ctx.lineTo(20 * scale, -40 * scale);
+    ctx.lineTo(20 * scale, -20 * scale);
+    ctx.stroke();
+    ctx.fillRect(15 * scale, -40 * scale, 10 * scale, 20 * scale);
+
+    ctx.restore();
+  }
+
+  function drawCityLights(time) {
+    cityLights.forEach(light => {
+      const flicker = Math.sin(time * 0.005 + light.flickerPhase);
+      const brightness = 0.4 + 0.6 * (flicker * flicker);
+      ctx.fillStyle = `rgba(247,215,116,${brightness.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(light.x, light.y, light.radius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  function drawHeatHaze(time) {
+    heatHazePoints.forEach(p => {
+      const offsetX = Math.sin(time * 0.003 + p.offsetPhase) * heatHazeMaxOffset;
+      const offsetY = Math.cos(time * 0.002 + p.offsetPhase) * heatHazeMaxOffset;
+      ctx.fillStyle = `rgba(255, 255, 255, 0.03)`;
+      ctx.beginPath();
+      ctx.ellipse(p.x + offsetX, p.y + offsetY, 30, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  // Draw mountain silhouettes at horizon
+  function drawMountains() {
+    const baseY = H * 0.65;
+    ctx.fillStyle = '#402800';
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    let x = 0;
+    while (x < W) {
+      const peakHeight = randRange(40, 80);
+      const peakWidth = randRange(80, 150);
+      ctx.lineTo(x + peakWidth/2, baseY - peakHeight);
+      ctx.lineTo(x + peakWidth, baseY);
+      x += peakWidth;
+    }
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Animate narration text
+  function cycleNarration() {
+    narrationDiv.style.opacity = 0;
+    setTimeout(() => {
+      narrationIndex = (narrationIndex + 1) % narrationTexts.length;
+      narrationDiv.textContent = narrationTexts[narrationIndex];
+      narrationDiv.style.opacity = 1;
+    }, 1000);
+  }
+  setInterval(cycleNarration, 12000);
+
+  // Main animation loop
+  function animate(time = 0) {
+    ctx.clearRect(0, 0, W, H);
+
+    drawSky();
+
+    const sunProgress = ((time - sunStartTime) % sunDuration) / sunDuration;
+    drawSun(sunProgress);
+
+    drawMountains();
+
+    drawDunes(time);
+
+    // Draw cacti
+    cacti.forEach(c => drawCactus(c.x, c.y, c.scale, c.swayPhase));
+
+    drawCityLights(time);
+
+    drawHeatHaze(time);
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+
+})();
+</script>
+</body>
+</html>
