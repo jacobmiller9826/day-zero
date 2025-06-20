@@ -1,127 +1,353 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" >
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Day Zero: Phoenix</title>
-<style>
-  html, body {
-    margin: 0; padding: 0;
-    height: 100%;
-    background: linear-gradient(to bottom, #f5d27a, #cc3300);
-    font-family: 'Rubik Distressed', cursive, sans-serif;
-    color: #fff8e1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-  }
-  #intro-screen {
-    padding: 20px;
-    max-width: 90vw;
-    user-select: none;
-  }
-  #intro-screen h1 {
-    font-size: clamp(2rem, 6vw, 4rem);
-    margin-bottom: 0.5em;
-    text-shadow: 2px 2px 6px #440000;
-  }
-  #intro-screen p {
-    font-size: clamp(1rem, 4vw, 1.5rem);
-    margin-bottom: 1.5em;
-    text-shadow: 1px 1px 3px #440000;
-  }
-  #start-button {
-    font-size: clamp(1rem, 4vw, 1.5rem);
-    padding: 1em 3em;
-    border: 2px solid #fff8e1;
-    background: rgba(0,0,0,0.3);
-    border-radius: 10px;
-    color: #fff8e1;
-    cursor: pointer;
-    transition: background 0.3s ease;
-  }
-  #start-button:hover {
-    background: rgba(255,255,255,0.1);
-  }
-  #story-container {
-    display: none;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    max-width: 90vw;
-  }
-  #narration {
-    font-size: clamp(1rem, 4vw, 1.5rem);
-    margin-bottom: 1em;
-    user-select: none;
-  }
-  #next-btn {
-    font-size: clamp(1rem, 4vw, 1.5rem);
-    padding: 0.8em 2em;
-    border: 2px solid #fff8e1;
-    background: rgba(0,0,0,0.3);
-    border-radius: 8px;
-    color: #fff8e1;
-    cursor: pointer;
-    transition: background 0.3s ease;
-  }
-  #next-btn:hover {
-    background: rgba(255,255,255,0.1);
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Day Zero: Phoenix - Procedural Story</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rubik+Distressed&display=swap');
+    html, body {
+      margin:0; padding:0;
+      height: 100%;
+      background: linear-gradient(to bottom, #f5d27a, #cc3300);
+      font-family: 'Rubik Distressed', cursive, sans-serif;
+      color: #fff8e1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      user-select: none;
+      transition: background 1s ease;
+    }
+    #bgcanvas {
+      position: fixed;
+      top:0; left:0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+    #container {
+      position: relative;
+      max-width: 95vw;
+      z-index: 10;
+      padding: 20px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 12px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    h1 {
+      font-size: clamp(2rem, 8vw, 4rem);
+      margin-bottom: 0.3em;
+      text-shadow: 2px 2px 6px #440000;
+    }
+    #text {
+      font-size: clamp(1rem, 4vw, 1.5rem);
+      min-height: 100px;
+      margin-bottom: 1em;
+      opacity: 0;
+      transition: opacity 0.7s ease;
+      line-height: 1.5;
+      text-shadow: 1px 1px 3px #440000;
+    }
+    #text.visible {
+      opacity: 1;
+    }
+    #choices {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 10px;
+    }
+    button {
+      cursor: pointer;
+      background: rgba(0,0,0,0.4);
+      border: 2px solid #fff8e1;
+      color: #fff8e1;
+      padding: 12px 24px;
+      font-size: clamp(1rem, 3vw, 1.3rem);
+      border-radius: 10px;
+      font-family: 'Rubik Distressed', cursive, sans-serif;
+      transition: background 0.3s ease;
+      user-select: none;
+      flex: 1 1 150px;
+      max-width: 250px;
+    }
+    button:hover, button:focus {
+      background: rgba(255,255,255,0.15);
+      outline: none;
+    }
+    #voiceToggle {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      background: rgba(0,0,0,0.4);
+      border: 2px solid #fff8e1;
+      color: #fff8e1;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-family: 'Rubik Distressed', cursive, sans-serif;
+      font-size: clamp(0.9rem, 3vw, 1.2rem);
+      cursor: pointer;
+      user-select: none;
+      z-index: 20;
+      transition: background 0.3s ease;
+    }
+    #voiceToggle:hover {
+      background: rgba(255,255,255,0.15);
+    }
+  </style>
 </head>
 <body>
+  <canvas id="bgcanvas"></canvas>
 
-  <div id="intro-screen">
+  <div id="container" role="main" aria-live="polite" aria-atomic="true" aria-relevant="text">
     <h1>Day Zero: Phoenix</h1>
-    <p>The taps run dry. 5 million people remain trapped in the desert city.<br>
-       What will you do when the water runs out?</p>
-    <button id="start-button">Tap to Begin</button>
+    <div id="text"></div>
+    <div id="choices"></div>
   </div>
 
-  <div id="story-container">
-    <div id="narration"></div>
-    <button id="next-btn">Next</button>
-  </div>
+  <button id="voiceToggle" aria-pressed="false" aria-label="Toggle narration voice">🔇 Voice Off</button>
 
 <script>
-  const introScreen = document.getElementById('intro-screen');
-  const startButton = document.getElementById('start-button');
-  const storyContainer = document.getElementById('story-container');
-  const narration = document.getElementById('narration');
-  const nextBtn = document.getElementById('next-btn');
+(() => {
+  const canvas = document.getElementById('bgcanvas');
+  const ctx = canvas.getContext('2d');
+  const textEl = document.getElementById('text');
+  const choicesEl = document.getElementById('choices');
+  const voiceToggle = document.getElementById('voiceToggle');
 
-  const scenes = [
-    "The taps run dry. 5 million people remain in the desert city.",
-    "Heat rises from the asphalt. Shelves go empty. Panic begins.",
-    "You hear helicopters overhead, and the distant hum of generators.",
-    "Do you run? Stay? Or try to lead?",
-    "You chose to flee. Cars clog the roads. You run out of gas.",
-    "You walk the highway. The sun scorches your skin.",
-    "You collapse near a dry canal, wondering if help will come..."
+  let W = window.innerWidth;
+  let H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+
+  window.addEventListener('resize', () => {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W;
+    canvas.height = H;
+  });
+
+  // Simple desert sand particles animation
+  const particlesCount = 120;
+  const particles = [];
+  for(let i=0; i<particlesCount; i++) {
+    particles.push({
+      x: Math.random()*W,
+      y: Math.random()*H,
+      size: 0.5 + Math.random()*1.5,
+      speed: 0.1 + Math.random()*0.3,
+      opacity: 0.2 + Math.random()*0.3
+    });
+  }
+
+  function drawParticles() {
+    ctx.clearRect(0, 0, W, H);
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#f5d27a');
+    grad.addColorStop(1, '#cc3300');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    particles.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity})`;
+      ctx.fill();
+      p.x += p.speed;
+      if (p.x > W) p.x = 0;
+    });
+  }
+
+  function animate() {
+    drawParticles();
+    requestAnimationFrame(animate);
+  }
+  animate();
+
+  // Procedural story generator engine:
+
+  // Phrase parts to build sentences dynamically
+  const subjects = [
+    "You", "The city", "The sun", "Desperation", "Hope", "The heat",
+    "Neighbors", "The government", "Supplies", "The desert"
+  ];
+  const verbs = [
+    "runs dry", "burns", "fades", "rises", "falls", "waits",
+    "breaks", "flows", "shatters", "lingers"
+  ];
+  const objects = [
+    "the water supply", "the streets", "the hope", "the silence", "the tension",
+    "the horizon", "the screams", "the dust", "the sand", "the night"
+  ];
+  const adjectives = [
+    "scorching", "dry", "barren", "fragile", "desperate", "silent",
+    "heated", "empty", "broken", "unstable"
+  ];
+  const adverbs = [
+    "slowly", "suddenly", "quietly", "angrily", "harshly", "relentlessly",
+    "desperately", "silently", "brutally", "mercilessly"
   ];
 
-  let index = 0;
+  // Probabilistic choices for branching
+  const choicesTemplates = [
+    { text: "Flee the city", next: "flee" },
+    { text: "Stay and defend", next: "stay" },
+    { text: "Organize survivors", next: "organize" }
+  ];
 
-  startButton.onclick = () => {
-    introScreen.style.display = 'none';
-    storyContainer.style.display = 'flex';
-    narration.textContent = scenes[index];
-  };
+  // State to track
+  let currentScene = null;
 
-  nextBtn.onclick = () => {
-    index++;
-    if (index < scenes.length) {
-      narration.textContent = scenes[index];
-    } else {
-      narration.textContent = "The story has ended. Tap 'Next' to restart.";
-      index = -1; // reset on next click
+  // Generate a sentence dynamically
+  function generateSentence() {
+    // Randomly pick a sentence pattern:
+    const patterns = [
+      () => `${pick(subjects)} ${pick(adverbs)} ${pick(verbs)} ${pick(objects)}.`,
+      () => `${pick(adjectives).charAt(0).toUpperCase() + pick(adjectives).slice(1)} days lie ahead.`,
+      () => `${pick(subjects)} feels ${pick(adjectives)} and ${pick(adjectives)}.`,
+      () => `The ${pick(objects)} ${pick(adverbs)} ${pick(verbs)}.`,
+      () => `${pick(subjects)} must choose: ${choicesTemplates.map(c => c.text).join(", ")}.`
+    ];
+    // Pick a pattern and generate
+    return patterns[Math.floor(Math.random()*patterns.length)]();
+  }
+
+  // Helper to pick random from array
+  function pick(arr) {
+    return arr[Math.floor(Math.random()*arr.length)];
+  }
+
+  // Show scene text with fade
+  function showText(text) {
+    textEl.classList.remove('visible');
+    setTimeout(() => {
+      textEl.textContent = text;
+      textEl.classList.add('visible');
+    }, 300);
+    if (voiceOn) speakText(text);
+  }
+
+  // Render choices buttons
+  function renderChoices(choices) {
+    choicesEl.innerHTML = '';
+    choices.forEach(c => {
+      const btn = document.createElement('button');
+      btn.textContent = c.text;
+      btn.onclick = () => {
+        currentScene = c.next;
+        advanceScene();
+      };
+      choicesEl.appendChild(btn);
+    });
+  }
+
+  // Voice synthesis
+  let voiceOn = false;
+  let utterance = null;
+
+  voiceToggle.addEventListener('click', () => {
+    voiceOn = !voiceOn;
+    voiceToggle.textContent = voiceOn ? "🔊 Voice On" : "🔇 Voice Off";
+    voiceToggle.setAttribute('aria-pressed', voiceOn);
+    if (!voiceOn && speechSynthesis.speaking) {
+      speechSynthesis.cancel();
     }
-  };
-</script>
+  });
 
-</body>
-</html>
+  function speakText(txt) {
+    if (!voiceOn) return;
+    if (speechSynthesis.speaking) speechSynthesis.cancel();
+    utterance = new SpeechSynthesisUtterance(txt);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    speechSynthesis.speak(utterance);
+  }
+
+  // Scene logic for procedural flow
+  function advanceScene() {
+    if (!currentScene) {
+      // First scene: show intro and choices
+      showText("The taps run dry. Five million people remain trapped in the desert city. What will you do?");
+      renderChoices(choicesTemplates);
+      currentScene = 'start';
+    } else if (currentScene === 'flee') {
+      const sentence = generateSentence();
+      showText(`You choose to flee. ${sentence}`);
+      renderChoices([
+        { text: "Keep running", next: 'flee' },
+        { text: "Rest", next: 'rest' },
+        { text: "Try to find water", next: 'water' }
+      ]);
+    } else if (currentScene === 'stay') {
+      const sentence = generateSentence();
+      showText(`You decide to stay and defend your home. ${sentence}`);
+      renderChoices([
+        { text: "Barricade", next: 'barricade' },
+        { text: "Gather supplies", next: 'gather' },
+        { text: "Seek allies", next: 'organize' }
+      ]);
+    } else if (currentScene === 'organize') {
+      const sentence = generateSentence();
+      showText(`You try to organize survivors to share resources. ${sentence}`);
+      renderChoices([
+        { text: "Expand network", next: 'organize' },
+        { text: "Focus on defense", next: 'stay' },
+        { text: "Negotiate peace", next: 'peace' }
+      ]);
+    } else if (currentScene === 'rest') {
+      showText("You rest briefly, but the heat is merciless. You must move on.");
+      renderChoices([
+        { text: "Keep fleeing", next: 'flee' },
+        { text: "Turn back", next: 'stay' }
+      ]);
+    } else if (currentScene === 'water') {
+      showText("You find a small spring. It’s not much, but it’s hope.");
+      renderChoices([
+        { text: "Hide and conserve", next: 'hide' },
+        { text: "Seek help", next: 'organize' }
+      ]);
+    } else if (currentScene === 'barricade') {
+      showText("Your barricade holds for now. The silence is tense.");
+      renderChoices([
+        { text: "Scout the neighborhood", next: 'scout' },
+        { text: "Prepare for conflict", next: 'conflict' }
+      ]);
+    } else if (currentScene === 'gather') {
+      showText("You gather scarce supplies. Every drop counts.");
+      renderChoices([
+        { text: "Share with others", next: 'organize' },
+        { text: "Hide for yourself", next: 'hide' }
+      ]);
+    } else if (currentScene === 'hide') {
+      showText("You hide and conserve energy, hoping for rescue.");
+      renderChoices([
+        { text: "Wait longer", next: 'end' },
+        { text: "Try to move", next: 'flee' }
+      ]);
+    } else if (currentScene === 'scout') {
+      showText("You spot signs of others trying to survive nearby.");
+      renderChoices([
+        { text: "Make contact", next: 'organize' },
+        { text: "Avoid them", next: 'hide' }
+      ]);
+    } else if (currentScene === 'conflict') {
+      showText("Tensions boil over. Violence erupts in the streets.");
+      renderChoices([
+        { text: "Fight for control", next: 'end' },
+        { text: "Attempt peace", next: 'peace' }
+      ]);
+    } else if (currentScene === 'peace') {
+      showText("Peace is fragile but gives a glimmer of hope.");
+      renderChoices([
+        { text: "Expand peace", next: 'organize' },
+        { text: "Protect your group",
